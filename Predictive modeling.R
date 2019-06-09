@@ -1,5 +1,6 @@
 library(PRROC)
-
+library(rpart)
+library(caret)
 ## Predictive modelling
 
 #German credit data: This well-known data set is used to classify customers as having good or bad credit based on customer attributes
@@ -62,3 +63,36 @@ plot(roc1)
 # Pr CUrve
 pr <- pr.curve(scores.class0 = fg1, scores.class1 = bg1, curve = T)
 plot(pr)
+
+# Decision tree
+m1 <- rpart(response~.,
+            method="class", data=train)
+
+pdata <- as.data.frame(predict(m1, newdata = test, type = "p"))
+pdata$my_custom_predicted_class <- ifelse(pdata$`1`> .5, 1, 0)
+pdata$my_custom_predicted_class<-factor(pdata$my_custom_predicted_class)
+test$response<-factor(test$response)
+# confusion matrix
+caret::confusionMatrix(data = pdata$my_custom_predicted_class, 
+                       reference = test$response, positive = "1")
+fg2 <- pdata$`1`[test$response == 1]
+bg2 <- pdata$`1`[test$response == 0]
+
+roc2 <- PRROC::roc.curve(scores.class0 = fg2, 
+                         scores.class1 = bg2, curve = T)
+plot(roc2)
+
+pr2 <- pr.curve(scores.class0 = fg2, scores.class1 = bg2, curve = T)
+plot(pr2)
+
+
+# Comparision of two models based on ROC
+plot(roc1,col=1,lty=2,main="ROC")
+plot(roc2,col=2,lty=2,add=TRUE)
+
+
+legend(x="bottomright", 
+       legend= c("Logistic regression", 
+                 "Decision tree"),
+       fill = 1:5)
+
