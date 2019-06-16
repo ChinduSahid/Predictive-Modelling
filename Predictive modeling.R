@@ -1,7 +1,7 @@
 library(PRROC)
 library(rpart)
 library(caret)
-## Predictive modelling
+### Predictive modelling
 
 #German credit data: This well-known data set is used to classify customers as having good or bad credit based on customer attributes
 #(e.g. information on bank accounts or property). The data can be found at the UC Irvine Machine Learning Repository and in the caret R package.   
