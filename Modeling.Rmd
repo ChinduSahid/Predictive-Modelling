@@ -1,0 +1,59 @@
+---
+title: "Basics of Predictive modeling (Binary Classification)"
+author: "CHINDU"
+---
+
+In this report we will look into the basics of predictive modeling.
+It is aways important to carry out data cleaning, data preparatioan and feature engineering before modeling. These steps will not be covered in this report (Refer to to the Data-Preparation rep if you are intrested in learning about data-preparation)
+
+Here lets assume the data is cleaned and prepared for modeling.
+
+We will be using the dataset 'German Credit'. This well-known data set is used to classify customers as having good or bad credit based on customer attributes (e.g. information on bank accounts or property). The data can be found at the UC Irvine Machine Learning Repository and in the caret R package.   
+
+In this report we will build a few models to predict if a customer has a good or bad credit based on customer attributes.
+
+```{r}
+#Read the data
+german_credit = read.table("http://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data")
+
+#Understand the structure
+str(german_credit)
+```
+The data is not labeled. Lets first label our data.
+```{r}
+colnames(german_credit) = c("chk_acct", "duration", "credit_his", "purpose", 
+                            "amount", "saving_acct", "present_emp", "installment_rate", "sex", "other_debtor", 
+                            "present_resid", "property", "age", "other_install", "housing", "n_credits", 
+                            "job", "n_people", "telephone", "foreign", "CustomerCredit")
+str(german_credit)
+
+```
+For binary classification we need to first ensure that our target/repose variable is a factor.
+```{r}
+#Changing CustomerCredit to a factor
+german_credit$CustomerCredit <- as.factor(german_credit$CustomerCredit)
+str(german_credit)
+```
+
+In this data, 1 refers to "good" and 2 refers to "bad".
+
+## Data Splitting
+One of the most important step in data modeling is to decide how to utilize the available data. A common technique is to split the data into testing and training sets. 
+Training Set - used to develop the model (example estimaitng parameters and comparing models)
+Testing Set - used is used to estimate an unbiased assessment of the model's performance.
+
+So what is a good split or data?
+The proportion of data can be driven by many factors, including the size of the original pool of samples and the total number of predictors. 
+
+There are a number of ways to split the data into training and testing sets. The most common approach is to use some version of random sampling. Completely random sampling is a straightforward strategy to implement and usually protects the process from being biased towards any characteristic of the data. However this approach can be problematic when the response is not evenly distributed across the outcome. A less risky splitting strategy would be to use a stratified random sample based on the outcome. For classification models, this is accomplished by selecting samples at random within each class. This approach ensures that the frequency distribution of the outcome is approximately equal within the training and test sets. When the outcome is numeric, artificial strata can be constructed based on the quartiles of the data. For example, in the Ames housing price data, the quartiles of the outcome distribution would break the data into four artificial groups containing roughly 230 houses. The training/test split would then be conducted within these four groups and the four different training set portions are pooled together (and the same for the test set).
+Non-random sampling can also be used when there is a good reason. One such case would be when there is an important temporal aspect to the data. Here it may be prudent to use the most recent data as the test set. 
+
+Split data into training and testing with a 70/30 split
+```{r}
+set.seed(123)
+in.train <- createDataPartition(as.factor(german_credit$response), p=0.7, list=FALSE)
+train <- german_credit[in.train,]
+test <- german_credit[-in.train,]
+View(train)
+table(train$response)
+```

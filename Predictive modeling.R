@@ -15,7 +15,6 @@ colnames(german_credit) = c("chk_acct", "duration", "credit_his", "purpose",
                             "present_resid", "property", "age", "other_install", "housing", "n_credits", 
                             "job", "n_people", "telephone", "foreign", "response")
 
-german_credit$response = german_credit$response - 1
 german_credit$response <- as.factor(german_credit$response)
 
 # Split data into training and testing with a 70/30 split
@@ -24,7 +23,7 @@ set.seed(123)
 in.train <- createDataPartition(as.factor(german_credit$response), p=0.7, list=FALSE)
 train <- german_credit[in.train,]
 test <- german_credit[-in.train,]
-
+View(train)
 table(train$response)
 
 # Basic logistic regression model
@@ -46,14 +45,14 @@ Model2<- glm(formula = response ~ chk_acct + duration + credit_his + purpose +
                housing + foreign, family = binomial, data = train)
 pred <- predict(Model2, type = "response",newdata = test)
 y_act <- test$response
-pred1<- ifelse(pred > 0.5,1,0)
+pred1<- ifelse(pred > 0.5,2,1)
 
 # Confusion matrix
-confusionMatrix(table(pred1,y_act), positive='1')
-confusionMatrix(table(pred1,y_act), positive='1',mode = "prec_recall")
+confusionMatrix(table(pred1,y_act), positive='2')
+confusionMatrix(table(pred1,y_act), positive='2',mode = "prec_recall")
 
-fg1 <- pred[test$response == 1]
-bg1 <- pred[test$response == 0]
+fg1 <- pred[test$response == 2]
+bg1 <- pred[test$response == 1]
 
 
 # ROC Curve    
@@ -69,14 +68,14 @@ m1 <- rpart(response~.,
             method="class", data=train)
 
 pdata <- as.data.frame(predict(m1, newdata = test, type = "p"))
-pdata$my_custom_predicted_class <- ifelse(pdata$`1`> .5, 1, 0)
+pdata$my_custom_predicted_class <- ifelse(pdata$`2`> .5, 2,1)
 pdata$my_custom_predicted_class<-factor(pdata$my_custom_predicted_class)
 test$response<-factor(test$response)
 # confusion matrix
 caret::confusionMatrix(data = pdata$my_custom_predicted_class, 
-                       reference = test$response, positive = "1")
-fg2 <- pdata$`1`[test$response == 1]
-bg2 <- pdata$`1`[test$response == 0]
+                       reference = test$response, positive = "2")
+fg2 <- pdata$`2`[test$response == 2]
+bg2 <- pdata$`2`[test$response == 1]
 
 roc2 <- PRROC::roc.curve(scores.class0 = fg2, 
                          scores.class1 = bg2, curve = T)
