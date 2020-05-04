@@ -37,6 +37,23 @@ str(german_credit)
 
 In this data, 1 refers to "good" and 2 refers to "bad".
 
+Next lets explore the distribution of our target variable. This is a key step to understand if there is a need to apply sampling methods (RUS,ROS,SMOTE,Ensemble different resampled datasets, etc ..) to solve data imbalance problems.
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+
+germanNew <- german_credit %>% group_by(CustomerCredit) %>% 
+ summarize(count = n()) %>%  # count records by species
+ mutate(pct = count/sum(count))
+ggplot(germanNew, aes(CustomerCredit, pct, fill = CustomerCredit)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=scales::percent(pct)), position = position_stack(vjust = .5))+
+  scale_y_continuous(labels = scales::percent)
+```
+
+The data contains 70% good credit and 30% bad credit. The data has a minor data imbalance. The ideal distribution is 50% good and 50% bad. Some algorithms are able to handle such data imbalance but in a situation where the algorithm performs poorly, sampling methods should be used. In this analysis, we will use this imbalanced data and determine if our algorithms are able to handle the data imbalance.
+
 ## Data Splitting
 One of the most important step in data modeling is to decide how to utilize the available data. A common technique is to split the data into testing and training sets. 
 Training Set - used to develop the model (example estimaitng parameters and comparing models)
@@ -45,15 +62,169 @@ Testing Set - used is used to estimate an unbiased assessment of the model's per
 So what is a good split or data?
 The proportion of data can be driven by many factors, including the size of the original pool of samples and the total number of predictors. 
 
-There are a number of ways to split the data into training and testing sets. The most common approach is to use some version of random sampling. Completely random sampling is a straightforward strategy to implement and usually protects the process from being biased towards any characteristic of the data. However this approach can be problematic when the response is not evenly distributed across the outcome. A less risky splitting strategy would be to use a stratified random sample based on the outcome. For classification models, this is accomplished by selecting samples at random within each class. This approach ensures that the frequency distribution of the outcome is approximately equal within the training and test sets. When the outcome is numeric, artificial strata can be constructed based on the quartiles of the data. For example, in the Ames housing price data, the quartiles of the outcome distribution would break the data into four artificial groups containing roughly 230 houses. The training/test split would then be conducted within these four groups and the four different training set portions are pooled together (and the same for the test set).
-Non-random sampling can also be used when there is a good reason. One such case would be when there is an important temporal aspect to the data. Here it may be prudent to use the most recent data as the test set. 
+There are a number of ways to split the data into training and testing sets. The most common approach is to use some version of random sampling. Completely random sampling is a straightforward strategy to implement and usually protects the process from being biased towards any characteristic of the data. However this approach can be problematic when the response is not evenly distributed across the outcome such as in our case. A less risky splitting strategy would be to use a stratified random sample based on the outcome. For classification models, this is accomplished by selecting samples at random within each class. This approach ensures that the frequency distribution of the outcome is approximately equal within the training and test sets
 
 Split data into training and testing with a 70/30 split
 ```{r}
+library(caret)
 set.seed(123)
-in.train <- createDataPartition(as.factor(german_credit$response), p=0.7, list=FALSE)
+in.train <- createDataPartition(as.factor(german_credit$CustomerCredit), p=0.7, list=FALSE)
 train <- german_credit[in.train,]
 test <- german_credit[-in.train,]
-View(train)
-table(train$response)
+# Training Data
+table(train$CustomerCredit)
+# Testing Data
+table(test$CustomerCredit)
+germanNew2 <- train %>% group_by(CustomerCredit) %>% 
+ summarize(count = n()) %>%  # count records by species
+ mutate(pct = count/sum(count))
+ggplot(germanNew2, aes(CustomerCredit, pct, fill = CustomerCredit)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=scales::percent(pct)), position = position_stack(vjust = .5))+
+  scale_y_continuous(labels = scales::percent) + labs(title= "Training Data")
+
+germanNew3 <- test %>% group_by(CustomerCredit) %>% 
+ summarize(count = n()) %>%  # count records by species
+ mutate(pct = count/sum(count))
+ggplot(germanNew3, aes(CustomerCredit, pct, fill = CustomerCredit)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=scales::percent(pct)), position = position_stack(vjust = .5))+
+  scale_y_continuous(labels = scales::percent) + labs(title = "Testing Data")
+```
+
+Here we used the stratified random sampling based on the reponse/target variable
+The histograms shows the distribution of good and bad for the test and train dataset is the same.
+
+### Logistic Regression
+# Building basic models for binary classification/prediction
+```{r}
+# Basic logistic regression model
+model1 <- glm(CustomerCredit ~ ., family = binomial, train)
+model1
+```
+AIC is a goodness of fit measure that favours smaller residual error in the model, but penalises for including further predictors and helps avoiding overfitting.
+
+```{r}
+#variable selection using AIC (both,backward,forward). Here we are using both
+
+StepModel1 <- step(model1, direction = "both")
+summary(StepModel1)
+```
+
+```{r}
+#chi-square test for significance of variables
+
+# Chi square test on our initial model
+drop1(model1, test ="Chi")
+
+# Chi Square test on model after AIC selection
+drop1(StepModel1,test="Chi")
+```
+We can see that the AIC selection has provided us with the variable that has the most impact on our target variable.
+
+
+# using significant variables based on AIC selection
+```{r}
+# logistic regression
+Model2<- glm(formula = CustomerCredit ~ chk_acct + duration + credit_his + purpose + 
+               amount + saving_acct + present_emp + other_debtor + other_install + 
+               housing + foreign, family = binomial, data = train)
+```
+
+Next we are going to use our testing data on our model to see how well the model performs on unseen data
+
+```{r}
+pred <- predict(Model2, type = "response",newdata = test)
+y_act <- test$CustomerCredit
+
+#We can customise the probability rate at which the model determines if the outcome is good or bad.
+#In this case we are setting the probability to greater than 0.5. This means that if probabily is >0.5 then bad else good.
+pred1<- ifelse(pred > 0.5,2,1)
+
+
+
+# Confusion matrix
+confusionMatrix(table(pred1,y_act), positive='2')
+confusionMatrix(table(pred1,y_act), positive='2',mode = "prec_recall")
+```
+
+In situations were data is imbalanced, comparing accuracy is not ideal. Imagine the model predicts all cases as good. We will have an accuracy of 70%, but this is a bad model as our aim is to predict the cases which are bad. Well anyone can say all cases are good and get 70% accuracy, we don't need ML do to that.
+
+So how do you determine if our model is good in such cases?
+We can use metrics such as specificity,sensitivity,precision,recall and F-measure.
+
+Sensitivity: metric that evaluates a model’s ability to predict true positives of each available category
+Specificity: metric that evaluates a model’s ability to predict true negatives of each available category
+Recall: measure of completeness; the proportion of positive class examples that are classified correctly to all positive class
+Precision: measure of exactness, the proportion of positive class examples that are classified correctly to the examples predicted as positive by the classifier
+F-measure: incorporates both recall and precision to express the trade-off between them.
+
+## ROC & PR curve
+```{r}
+library(PRROC)
+fg1 <- pred[test$CustomerCredit == 2]
+bg1 <- pred[test$CustomerCredit == 1]
+
+# ROC Curve    
+roc1 <- PRROC::roc.curve(scores.class0 = fg1, scores.class1 = bg1, curve = T)
+plot(roc1)
+
+# PR CUrve
+pr <- pr.curve(scores.class0 = fg1, scores.class1 = bg1, curve = T)
+plot(pr)
+```
+
+
+### Decision Tree
+
+```{r}
+library(rpart)
+m1 <- rpart(CustomerCredit~.,
+            method="class", data=train)
+
+pdata <- as.data.frame(predict(m1, newdata = test, type = "p"))
+pdata$my_custom_predicted_class <- ifelse(pdata$`2`> .5, 2,1)
+pdata$my_custom_predicted_class<-factor(pdata$my_custom_predicted_class)
+test$CustomerCredit<-factor(test$CustomerCredit)
+# confusion matrix
+caret::confusionMatrix(data = pdata$my_custom_predicted_class, 
+                       reference = test$CustomerCredit, positive = "2")
+```
+
+
+## ROC & PR curve
+```{r}
+caret::confusionMatrix(data = pdata$my_custom_predicted_class, 
+                       reference = test$CustomerCredit, positive = "2",mode="prec_recall")
+fg2 <- pdata$`2`[test$CustomerCredit == 2]
+bg2 <- pdata$`2`[test$CustomerCredit == 1]
+
+roc2 <- PRROC::roc.curve(scores.class0 = fg2, 
+                         scores.class1 = bg2, curve = T)
+plot(roc2)
+
+pr2 <- pr.curve(scores.class0 = fg2, scores.class1 = bg2, curve = T)
+plot(pr2)
+```
+
+### Model comparison
+
+```{r}
+plot(roc1,col=1,lty=2,main="ROC")
+plot(roc2,col=2,lty=2,add=TRUE)
+
+
+legend(x="bottomright", 
+       legend= c("Logistic regression", 
+                 "Decision tree"),
+       fill = 1:5)
+
+plot(pr,col=1,lty=2,main="ROC")
+plot(pr2,col=2,lty=2,add=TRUE)
+
+
+legend(x="bottomright", 
+       legend= c("Logistic regression", 
+                 "Decision tree"),
+       fill = 1:5)
 ```
