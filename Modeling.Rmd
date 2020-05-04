@@ -1,6 +1,7 @@
 ---
 title: "Basics of Predictive modeling (Binary Classification)"
 author: "CHINDU"
+output: pdf_document
 ---
 
 In this report we will look into the basics of predictive modeling.
@@ -93,7 +94,7 @@ ggplot(germanNew3, aes(CustomerCredit, pct, fill = CustomerCredit)) +
 ```
 
 Here we used the stratified random sampling based on the reponse/target variable
-The histograms shows the distribution of good and bad for the test and train dataset is the same.
+The histograms shows the same distribution of good and bad for the test and train dataset
 
 ### Logistic Regression
 # Building basic models for binary classification/prediction
@@ -113,6 +114,8 @@ summary(StepModel1)
 
 ```{r}
 #chi-square test for significance of variables
+
+
 
 # Chi square test on our initial model
 drop1(model1, test ="Chi")
@@ -136,11 +139,13 @@ Next we are going to use our testing data on our model to see how well the model
 ```{r}
 pred <- predict(Model2, type = "response",newdata = test)
 y_act <- test$CustomerCredit
+```
 
 #We can customise the probability rate at which the model determines if the outcome is good or bad.
 #In this case we are setting the probability to greater than 0.5. This means that if probabily is >0.5 then bad else good.
+```{r}
 pred1<- ifelse(pred > 0.5,2,1)
-
+```
 
 
 # Confusion matrix
@@ -159,7 +164,7 @@ Recall: measure of completeness; the proportion of positive class examples that 
 Precision: measure of exactness, the proportion of positive class examples that are classified correctly to the examples predicted as positive by the classifier
 F-measure: incorporates both recall and precision to express the trade-off between them.
 
-## ROC & PR curve
+## ROC & PR curve (Logistic Regression)
 ```{r}
 library(PRROC)
 fg1 <- pred[test$CustomerCredit == 2]
@@ -192,7 +197,7 @@ caret::confusionMatrix(data = pdata$my_custom_predicted_class,
 ```
 
 
-## ROC & PR curve
+## ROC & PR curve (Decision Tree)
 ```{r}
 caret::confusionMatrix(data = pdata$my_custom_predicted_class, 
                        reference = test$CustomerCredit, positive = "2",mode="prec_recall")
@@ -228,3 +233,5 @@ legend(x="bottomright",
                  "Decision tree"),
        fill = 1:5)
 ```
+
+To understand how to analyse ROC/PR curve, please refer to the PDF on "Machine learning Ensemble"
