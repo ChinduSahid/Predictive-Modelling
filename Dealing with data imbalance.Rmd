@@ -1,0 +1,176 @@
+---
+title: "Comparison of Sampling methods"
+author: "CHINDU"
+date: "5/4/2020"
+output: pdf_document
+---
+
+#A basic analysis of different sampling methods that deals with data imbalance
+
+```{r}
+library(caret)
+library(rpart)
+library(dplyr)
+library(reshape)
+library(MLmetrics)
+library(DMwR)
+library(pROC)
+library(PRROC)
+library(ROSE)
+library(plyr)
+library(DMwR)
+```
+
+```{r}
+data<- read.csv("EnquiriesClean.csv")
+data$BookedStatus<-factor(data$BookedStatus)
+data$EnquiryMonth<-factor(data$EnquiryMonth)
+data$Hotkey<-factor(data$Hotkey)
+data$DepartureMonth<-factor(data$DepartureMonth)
+data$TempSent<-factor(data$TempSent)
+data$ConversationRCD<-factor(data$ConversationRCD)
+str(data)
+data$X<-NULL
+table(data$BookedStatus)
+DataNew <- data %>% group_by(BookedStatus) %>% 
+ dplyr::summarize(count = n()) %>% 
+ mutate(pct = count/sum(count))
+ggplot(DataNew, aes(BookedStatus, pct, fill = BookedStatus)) + 
+  geom_bar(stat='identity') + 
+  geom_text(aes(label=scales::percent(pct)), position = position_stack(vjust = .5))+
+  scale_y_continuous(labels = scales::percent)
+```
+
+The data has 98% cases of 0(negative) and 2% of 1 (positive)
+
+# Prep Training and Test data.
+```{r}
+set.seed(666)
+trainDataIndex <- createDataPartition(data$BookedStatus, p=0.7, list = F)  # 70% training data
+trainData <- data[trainDataIndex, ]
+testData <- data[-trainDataIndex, ]
+table(trainData$BookedStatus)
+```
+
+Sampling using RUS,ROS,SMOTE
+```{r}
+
+down_train1 <- upSample(x = trainData[,-ncol(trainData)],
+                          y = trainData$BookedStatus)
+down_train1$BookedStatus<- NULL
+down_train1<-rename(down_train1,c(Class="BookedStatus"))
+
+down_train2 <- downSample(x = trainData[,-ncol(trainData)],
+                         y = trainData$BookedStatus)
+down_train2$BookedStatus<- NULL
+down_train2<-rename(down_train2,c(Class="BookedStatus"))
+
+down_train3 <- SMOTE(BookedStatus ~ ., trainData,perc.over = 100, perc.under=200,k=5) 
+```
+
+Create models using the sampled datasets and unsampled data to understand the importance of sampling when data is imbalanced
+```{r}
+m1 <- rpart(BookedStatus~., data=down_train1, method="class")
+m2 <- rpart(BookedStatus~., data=down_train2, method="class")
+m3 <- rpart(BookedStatus~., data=down_train3, method="class")
+m6 <- rpart(BookedStatus~., data=trainData,   method="class")
+
+```
+
+```{r}
+table(testData$BookedStatus)
+```
+
+```{r}
+m1 <- rpart(BookedStatus~.,
+            method="class", data=down_train1)
+m2 <- rpart(BookedStatus~.,
+            method="class", data=down_train2)
+m3 <- rpart(BookedStatus~.,
+            method="class", data=down_train3)
+m4 <- rpart(BookedStatus~.,
+            method="class", trainData)
+```
+
+## Accuracy, Specificity, Sensitivity
+```{r}
+
+#ROS
+pdata <- as.data.frame(predict(m1, newdata = testData, type = "p"))
+pdata$my_custom_predicted_class <- ifelse(pdata$`1` > .5, 1, 0)
+pdata$my_custom_predicted_class<-factor(pdata$my_custom_predicted_class)
+testData$BookedStatus<-factor(testData$BookedStatus)
+caret::confusionMatrix(data = pdata$my_custom_predicted_class, 
+                   reference = testData$BookedStatus, positive = "1")
+
+#RUS
+pdata2 <- as.data.frame(predict(m2, newdata = testData, type = "p"))
+pdata2$my_custom_predicted_class <- ifelse(pdata2$`1` > .5, 1, 0)
+pdata2$my_custom_predicted_class<-factor(pdata2$my_custom_predicted_class)
+testData$BookedStatus<-factor(testData$BookedStatus)
+caret::confusionMatrix(data = pdata2$my_custom_predicted_class, 
+                       reference = testData$BookedStatus, positive = "1")
+
+#SMOTE
+pdata3 <- as.data.frame(predict(m3, newdata = testData, type = "p"))
+pdata3$my_custom_predicted_class <- ifelse(pdata3$`1` > .5, 1, 0)
+pdata3$my_custom_predicted_class<-factor(pdata3$my_custom_predicted_class)
+testData$BookedStatus<-factor(testData$BookedStatus)
+caret::confusionMatrix(data = pdata3$my_custom_predicted_class, 
+                       reference = testData$BookedStatus, positive = "1")
+
+#No Sampling
+pdata4 <- as.data.frame(predict(m4, newdata = testData, type = "p"))
+pdata4$my_custom_predicted_class <- ifelse(pdata4$`1` > .5, 1, 0)
+pdata4$my_custom_predicted_class<-factor(pdata4$my_custom_predicted_class)
+testData$BookedStatus<-factor(testData$BookedStatus)
+caret::confusionMatrix(data = pdata4$my_custom_predicted_class, 
+                       reference = testData$BookedStatus, positive = "1")
+```
+Notice that the no sampling model gives us an accuracy of 98%, but has a sensitivity of 0%. This means that this model failed to predict any positive cases and predicted all cases as negative. This model is basically useless.
+
+
+## Model comparison
+```{r}
+fg1 <- pdata$`1`[testData$BookedStatus == 1]
+bg1 <- pdata$`1`[testData$BookedStatus == 0]
+fg2 <- pdata2$`1`[testData$BookedStatus == 1]
+bg2 <- pdata2$`1`[testData$BookedStatus == 0]
+fg3 <- pdata3$`1`[testData$BookedStatus == 1]
+bg3 <- pdata3$`1`[testData$BookedStatus == 0]
+fg4 <- pdata4$`1`[testData$BookedStatus == 1]
+bg4 <- pdata4$`1`[testData$BookedStatus == 0]
+
+
+roc1 <- PRROC::roc.curve(scores.class0 = fg1, scores.class1 = bg1, curve = T)
+pr1 <- pr.curve(scores.class0 = fg1, scores.class1 = bg1, curve = T)
+
+
+roc2 <- PRROC::roc.curve(scores.class0 = fg2, scores.class1 = bg2, curve = T)
+pr2 <- pr.curve(scores.class0 = fg2, scores.class1 = bg2, curve = T)
+
+
+roc3 <- PRROC::roc.curve(scores.class0 = fg3, scores.class1 = bg3, curve = T)
+pr3 <- pr.curve(scores.class0 = fg3, scores.class1 = bg3, curve = T)
+
+# The ROC will show a straight line with 0.5 AUC as the algorithm was unable to deal with the data imbalance. 
+roc4 <- PRROC::roc.curve(scores.class0 = fg4, scores.class1 = bg4, curve = T)
+
+#you will not be able to plot a PR curve as the algorithm was unable to handle the data imbalance
+#pr4 <- pr.curve(scores.class0 = fg4, scores.class1 = bg4, curve = T)
+
+plot(roc1, col = 1, lty = 2, main = "ROC")
+plot(roc2, col = 2, lty = 2, add=TRUE)
+plot(roc3, col = 3, lty = 2, add=TRUE)
+plot(roc4,col=4 ,lty=2, add=TRUE)
+
+legend(x="bottomright", 
+       legend= c("Oversample", 
+                 "Undersample",
+                 "SMOTE",
+                 "No Sampling"),
+       fill = 1:5)
+```
+Without sampling the model basically was unable to do any logical prediction on the data, this is displayed by the straight line with AUC of 0.5. Once sampling was applied the model was able to perform faily well on the data with oversampling and undersampling perfoming better than SMOTE. Note that the sampling method that should be used depends on many cases example the distribution of data etc..
+
+#A more reliable analysis would be to use Precision and recall and a Precision recall curve. To know more about precision recall curve refer to "Machine Learing Ensemble.pdf"

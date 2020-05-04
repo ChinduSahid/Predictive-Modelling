@@ -45,7 +45,7 @@ library(ggplot2)
 library(tidyverse)
 
 germanNew <- german_credit %>% group_by(CustomerCredit) %>% 
- summarize(count = n()) %>%  # count records by species
+ summarize(count = n()) %>%  
  mutate(pct = count/sum(count))
 ggplot(germanNew, aes(CustomerCredit, pct, fill = CustomerCredit)) + 
   geom_bar(stat='identity') + 
